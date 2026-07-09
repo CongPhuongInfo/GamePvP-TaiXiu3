@@ -1,5 +1,9 @@
 # Tài Xỉu 3 Xúc Xắc
 
+<p align="center">
+  <img src="GameTaiXiu-Logo.png" width="800">
+</p>
+
 Trò chơi đặt cược 3 xúc xắc nhiều người chơi qua mạng LAN hoặc Online.
 Mỗi ván, người chơi chọn tối đa 1 số (Bộ Ba hoặc Tổng điểm) và 1 cửa
 (Trên/Dưới), Host tung 3 xúc xắc — trúng thì nhân hệ số, trật thì mất
