@@ -49,6 +49,9 @@ Public Class Form1
 
     ' Tong cuoc da dat (tat ca loai cong lai) cua tung seat trong van hien tai - de hien thi + kiem tra local
     Private myBetsThisRound As New List(Of String)  ' hien thi dang text: "Trên: 50", "Bộ Ba 4: 20"...
+    Private myBetKindsThisRound As New List(Of TaiXiuGame.BetKind) ' song song voi myBetsThisRound, de undo dung khi bi TX_BET_FAIL
+    Private myHasNumberBet As Boolean = False  ' da chon 1 so (Bo Ba HOAC Tong diem) trong van nay chua
+    Private myHasSideBet As Boolean = False    ' da chon 1 cua (Tren HOAC Duoi) trong van nay chua
 
     ' ------------------- Xuc xac + animation (tai su dung tu app Quay Xuc Xac) -------------------
     Private diceSprite(6) As Image
@@ -89,6 +92,18 @@ Public Class Form1
     Private lblCardStatus(3) As Label
     Private lblCardStats(3) As Label
 
+    ' ------------------- Sprite trang tri (nen go, khung, ruong, xu, ruy bang) -------------------
+    Private sprBgWood As Image
+    Private sprChest As Image
+    Private sprFrameTren As Image
+    Private sprFrameDuoi As Image
+    Private sprFrameBoBa As Image
+    Private sprCoin As Image
+    Private sprBannerEnded As Image
+    Private picChest As PictureBox
+    Private picBannerEnded As PictureBox
+    Private lblBannerEnded As Label
+
     ' ------------------- UI: Chat panel -------------------
     Private pnlChat As Panel
     Private lstChat As ListBox
@@ -124,6 +139,15 @@ Public Class Form1
                 diceTumbleSprite(t) = LoadImg(dir, "dice_roll_" & t.ToString() & ".png")
             Next t
             spritesLoaded = True
+
+            ' Sprite trang tri: khong bat buoc, thieu file nao thi fallback mau phang cho phan do (xem cac Sub Build...)
+            sprBgWood = LoadImg(dir, "bg_wood_table.png")
+            sprChest = LoadImg(dir, "chest_icon.png")
+            sprFrameTren = LoadImg(dir, "frame_tren.png")
+            sprFrameDuoi = LoadImg(dir, "frame_duoi.png")
+            sprFrameBoBa = LoadImg(dir, "frame_boba.png")
+            sprCoin = LoadImg(dir, "coin_icon.png")
+            sprBannerEnded = LoadImg(dir, "banner_ended.png")
         Catch
             spritesLoaded = False
         End Try
@@ -345,7 +369,9 @@ Public Class Form1
                 End If
 
             Case "TX_BET_FAIL"
-                MessageBox.Show("Cược không hợp lệ (sai số điểm hoặc không đủ điểm).")
+                Dim reasonMsg As String = If(payload.Trim() <> "", payload, "Cược không hợp lệ (sai số điểm hoặc không đủ điểm).")
+                UndoLastMyBetDisplay()
+                MessageBox.Show(reasonMsg)
 
             Case "TX_ROLL"
                 Dim dp As String() = payload.Split(","c)
@@ -399,6 +425,10 @@ Public Class Form1
         pnlGame = New Panel()
         pnlGame.Dock = DockStyle.Fill
         pnlGame.BackColor = Color.FromArgb(30, 40, 35)
+        If sprBgWood IsNot Nothing Then
+            pnlGame.BackgroundImage = sprBgWood
+            pnlGame.BackgroundImageLayout = ImageLayout.Stretch
+        End If
         Me.Controls.Add(pnlGame)
 
         BuildDicePanel()
@@ -441,6 +471,41 @@ Public Class Form1
             pnlGame.Controls.Add(p)
             picDice(i) = p
         Next i
+
+        ' Ruong kho bau: chi trang tri, dat vao khoang trong ben phai 3 xuc xac
+        If sprChest IsNot Nothing Then
+            picChest = New PictureBox()
+            picChest.Image = sprChest
+            picChest.SizeMode = PictureBoxSizeMode.Zoom
+            picChest.Location = New Point(280, 42)
+            picChest.Size = New Size(120, 90)
+            picChest.BackColor = Color.Transparent
+            pnlGame.Controls.Add(picChest)
+            picChest.SendToBack()
+        End If
+
+        ' Ruy bang "Da ket thuc": an mac dinh, chi hien khi co ket qua (ApplyResult)
+        If sprBannerEnded IsNot Nothing Then
+            picBannerEnded = New PictureBox()
+            picBannerEnded.Image = sprBannerEnded
+            picBannerEnded.SizeMode = PictureBoxSizeMode.Zoom
+            picBannerEnded.Location = New Point(700, 10)
+            picBannerEnded.Size = New Size(180, 50)
+            picBannerEnded.Visible = False
+            pnlGame.Controls.Add(picBannerEnded)
+
+            lblBannerEnded = New Label()
+            lblBannerEnded.Text = "ĐÃ KẾT THÚC"
+            lblBannerEnded.Font = New Font("Segoe UI", 9.0!, FontStyle.Bold)
+            lblBannerEnded.ForeColor = Color.White
+            lblBannerEnded.BackColor = Color.Transparent
+            lblBannerEnded.TextAlign = ContentAlignment.MiddleCenter
+            lblBannerEnded.Location = picBannerEnded.Location
+            lblBannerEnded.Size = picBannerEnded.Size
+            lblBannerEnded.Visible = False
+            pnlGame.Controls.Add(lblBannerEnded)
+            lblBannerEnded.BringToFront()
+        End If
     End Sub
 
     Private Sub BuildBetPanel()
@@ -458,25 +523,41 @@ Public Class Form1
         nudBet.Maximum = CDec(TaiXiuGame.MAX_BET)
         nudBet.Value = CDec(TaiXiuGame.MIN_BET)
         nudBet.Increment = 10
+        nudBet.BackColor = Color.FromArgb(250, 250, 245)
+        nudBet.ForeColor = Color.Black
+        nudBet.Font = New Font("Segoe UI", 9.5!, FontStyle.Bold)
         pnlGame.Controls.Add(nudBet)
 
-        ' --- Trên / Dưới ---
+        If sprCoin IsNot Nothing Then
+            Dim picCoin As New PictureBox()
+            picCoin.Image = sprCoin
+            picCoin.SizeMode = PictureBoxSizeMode.Zoom
+            picCoin.Location = New Point(328, 130)
+            picCoin.Size = New Size(20, 20)
+            picCoin.BackColor = Color.Transparent
+            pnlGame.Controls.Add(picCoin)
+        End If
+
+        ' --- Trên / Dưới (dung khung anh neu co, fallback mau phang) ---
         btnBetTren = New Button()
-        btnBetTren.Text = "Trên (11-17) x1"
+        btnBetTren.Text = "TRÊN (11-17) x1"
         btnBetTren.Location = New Point(20, 165) : btnBetTren.Size = New Size(150, 40)
+        StyleBetButtonWithFrame(btnBetTren, sprFrameTren, Color.FromArgb(178, 58, 46))
         AddHandler btnBetTren.Click, Sub(s As Object, e As EventArgs) TryPlaceBet(TaiXiuGame.BetKind.Tren, 0)
         pnlGame.Controls.Add(btnBetTren)
 
         btnBetDuoi = New Button()
-        btnBetDuoi.Text = "Dưới (4-10) x1"
+        btnBetDuoi.Text = "DƯỚI (4-10) x1"
         btnBetDuoi.Location = New Point(180, 165) : btnBetDuoi.Size = New Size(150, 40)
+        StyleBetButtonWithFrame(btnBetDuoi, sprFrameDuoi, Color.FromArgb(40, 105, 150))
         AddHandler btnBetDuoi.Click, Sub(s As Object, e As EventArgs) TryPlaceBet(TaiXiuGame.BetKind.Duoi, 0)
         pnlGame.Controls.Add(btnBetDuoi)
 
         ' --- Bo Ba 1..6 ---
         Dim lblBoBa As New Label()
         lblBoBa.Text = "Bộ Ba (x150):"
-        lblBoBa.ForeColor = Color.White
+        lblBoBa.ForeColor = Color.Gold
+        lblBoBa.Font = New Font("Segoe UI", 9.0!, FontStyle.Bold)
         lblBoBa.AutoSize = True
         lblBoBa.Location = New Point(20, 215)
         pnlGame.Controls.Add(lblBoBa)
@@ -485,6 +566,7 @@ Public Class Form1
             Dim btn As New Button()
             btn.Text = v.ToString() & "-" & v.ToString() & "-" & v.ToString()
             btn.Location = New Point(20 + (v - 1) * 58, 238) : btn.Size = New Size(54, 40)
+            StyleBetButtonWithFrame(btn, sprFrameBoBa, Color.FromArgb(150, 110, 30))
             Dim vv As Integer = v
             AddHandler btn.Click, Sub(s As Object, e As EventArgs) TryPlaceBet(TaiXiuGame.BetKind.BoBa, vv)
             pnlGame.Controls.Add(btn)
@@ -494,7 +576,8 @@ Public Class Form1
         ' --- Tong diem 4..17 (luoi giong bang cuoc trong anh) ---
         Dim lblTong As New Label()
         lblTong.Text = "Tổng điểm (hệ số hiện trên nút):"
-        lblTong.ForeColor = Color.White
+        lblTong.ForeColor = Color.Gold
+        lblTong.Font = New Font("Segoe UI", 9.0!, FontStyle.Bold)
         lblTong.AutoSize = True
         lblTong.Location = New Point(20, 290)
         pnlGame.Controls.Add(lblTong)
@@ -507,6 +590,7 @@ Public Class Form1
             Dim btn As New Button()
             btn.Text = sum.ToString() & vbCrLf & "x" & mult.ToString()
             btn.Location = New Point(20 + col * 58, 313 + row * 46) : btn.Size = New Size(54, 42)
+            StyleBetButton(btn, Color.FromArgb(70, 95, 65))
             Dim ss As Integer = sum
             AddHandler btn.Click, Sub(s As Object, e As EventArgs) TryPlaceBet(TaiXiuGame.BetKind.TongDiem, ss)
             pnlGame.Controls.Add(btn)
@@ -520,6 +604,9 @@ Public Class Form1
 
         lstMyBets = New ListBox()
         lstMyBets.Location = New Point(430, 45) : lstMyBets.Size = New Size(220, 200)
+        lstMyBets.BackColor = Color.FromArgb(250, 250, 245)
+        lstMyBets.ForeColor = Color.Black
+        lstMyBets.Font = New Font("Segoe UI", 9.5!)
         pnlGame.Controls.Add(lstMyBets)
         Dim lblMyBets As New Label()
         lblMyBets.Text = "Cược của bạn ván này:"
@@ -529,16 +616,50 @@ Public Class Form1
         pnlGame.Controls.Add(lblMyBets)
     End Sub
 
+    ''' <summary>Ap dung mau nen sang ro + chu trang dam + FlatStyle cho nut cuoc, de de nhin
+    ''' tren nen toi cua bang game (khac phan hoi: nut/o qua toi kho doc).</summary>
+    Private Sub StyleBetButton(btn As Button, backColor As Color)
+        btn.FlatStyle = FlatStyle.Flat
+        btn.FlatAppearance.BorderColor = Color.FromArgb(230, 230, 220)
+        btn.FlatAppearance.BorderSize = 1
+        btn.BackColor = backColor
+        btn.ForeColor = Color.White
+        btn.Font = New Font("Segoe UI", 8.5!, FontStyle.Bold)
+        btn.FlatAppearance.MouseOverBackColor = ControlPaint.Light(backColor, 0.25F)
+        btn.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(backColor, 0.15F)
+    End Sub
+
+    ''' <summary>Neu co anh khung trang tri (frameImg) thi dung lam BackgroundImage cho nut (chu
+    ''' trang dam, co do bong de doc duoc tren moi nen khung); neu khong co anh thi fallback ve
+    ''' StyleBetButton mau phang nhu cu.</summary>
+    Private Sub StyleBetButtonWithFrame(btn As Button, frameImg As Image, fallbackColor As Color)
+        If frameImg Is Nothing Then
+            StyleBetButton(btn, fallbackColor)
+            Return
+        End If
+        btn.FlatStyle = FlatStyle.Flat
+        btn.FlatAppearance.BorderSize = 0
+        btn.BackgroundImage = frameImg
+        btn.BackgroundImageLayout = ImageLayout.Stretch
+        btn.BackColor = Color.Transparent
+        btn.ForeColor = Color.White
+        btn.Font = New Font("Segoe UI", 8.5!, FontStyle.Bold)
+        btn.FlatAppearance.MouseOverBackColor = Color.FromArgb(40, 255, 255, 255)
+        btn.FlatAppearance.MouseDownBackColor = Color.FromArgb(70, 0, 0, 0)
+    End Sub
+
     Private Sub BuildHostControls()
         btnHostNewRound = New Button()
         btnHostNewRound.Text = "Bắt đầu ván mới (Host)"
         btnHostNewRound.Location = New Point(430, 250) : btnHostNewRound.Size = New Size(220, 36)
+        StyleBetButton(btnHostNewRound, Color.FromArgb(60, 130, 70))
         AddHandler btnHostNewRound.Click, AddressOf BtnHostNewRound_Click
         pnlGame.Controls.Add(btnHostNewRound)
 
         btnHostRoll = New Button()
         btnHostRoll.Text = "Tung xúc xắc ngay (Host)"
         btnHostRoll.Location = New Point(430, 292) : btnHostRoll.Size = New Size(220, 36)
+        StyleBetButton(btnHostRoll, Color.FromArgb(150, 120, 30))
         btnHostRoll.Enabled = False
         AddHandler btnHostRoll.Click, AddressOf BtnHostRoll_Click
         pnlGame.Controls.Add(btnHostRoll)
@@ -552,20 +673,20 @@ Public Class Form1
             Dim card As New Panel()
             card.Location = New Point(430 + (p Mod 2) * 130, 340 + (p \ 2) * 90)
             card.Size = New Size(120, 80)
-            card.BackColor = Color.FromArgb(50, 60, 55)
+            card.BackColor = Color.FromArgb(65, 78, 72)
             pnlGame.Controls.Add(card)
             pnlPlayers(p) = card
 
             Dim title As New Label()
             title.Name = "title"
             title.Text = "Player " & (p + 1).ToString()
-            title.ForeColor = Color.White
+            title.ForeColor = Color.Gold
             title.Font = New Font("Segoe UI", 8.5!, FontStyle.Bold)
             title.Location = New Point(6, 6) : title.Size = New Size(108, 16)
             card.Controls.Add(title)
 
             Dim status As New Label()
-            status.ForeColor = Color.LightGray
+            status.ForeColor = Color.WhiteSmoke
             status.Font = New Font("Segoe UI", 8.5!)
             status.Location = New Point(6, 26) : status.Size = New Size(108, 40)
             card.Controls.Add(status)
@@ -604,6 +725,7 @@ Public Class Form1
         btnSend = New Button()
         btnSend.Text = "Gửi"
         btnSend.Location = New Point(526, 124) : btnSend.Size = New Size(100, 28)
+        StyleBetButton(btnSend, Color.FromArgb(60, 100, 130))
         AddHandler btnSend.Click, AddressOf BtnSend_Click
         pnlChat.Controls.Add(btnSend)
     End Sub
@@ -702,7 +824,12 @@ Public Class Form1
         lblRoundInfo.Text = "Ván số " & roundNo.ToString() & " - Đang đặt cược..."
         lblCountdown.Text = "Còn " & secs.ToString() & " giây"
         myBetsThisRound.Clear()
+        myBetKindsThisRound.Clear()
         lstMyBets.Items.Clear()
+        myHasNumberBet = False
+        myHasSideBet = False
+        If picBannerEnded IsNot Nothing Then picBannerEnded.Visible = False
+        If lblBannerEnded IsNot Nothing Then lblBannerEnded.Visible = False
         UpdateBetButtonsEnabled()
         If isHost Then btnHostRoll.Enabled = True
     End Sub
@@ -710,11 +837,33 @@ Public Class Form1
     ' ============================================================
     '  DAT CUOC (CLIENT + HOST)
     ' ============================================================
+    ''' <summary>True neu kind la 1 trong 2 loai "chon 1 so" (Bo Ba hoac Tong diem).</summary>
+    Private Function IsNumberBetKind(kind As TaiXiuGame.BetKind) As Boolean
+        Return kind = TaiXiuGame.BetKind.BoBa OrElse kind = TaiXiuGame.BetKind.TongDiem
+    End Function
+
+    ''' <summary>True neu kind la 1 trong 2 loai "chon cua" (Tren hoac Duoi).</summary>
+    Private Function IsSideBetKind(kind As TaiXiuGame.BetKind) As Boolean
+        Return kind = TaiXiuGame.BetKind.Tren OrElse kind = TaiXiuGame.BetKind.Duoi
+    End Function
+
     Private Sub TryPlaceBet(kind As TaiXiuGame.BetKind, value As Integer)
         If state <> RoundState.Betting Then
             MessageBox.Show("Chưa tới lượt đặt cược. Chờ Host bắt đầu ván mới.")
             Return
         End If
+
+        ' Luat moi: moi van chi duoc chon DUY NHAT 1 so (Bo Ba HOAC Tong diem) va
+        ' toi da 1 cua (Tren HOAC Duoi), khong duoc chon nhieu so cung luc.
+        If IsNumberBetKind(kind) AndAlso myHasNumberBet Then
+            MessageBox.Show("Mỗi ván chỉ được chọn 1 số duy nhất (Bộ Ba hoặc Tổng điểm).")
+            Return
+        End If
+        If IsSideBetKind(kind) AndAlso myHasSideBet Then
+            MessageBox.Show("Mỗi ván chỉ được chọn 1 cửa (Trên hoặc Dưới).")
+            Return
+        End If
+
         Dim amount As Long = CLng(nudBet.Value)
         Dim mySeat As Integer = If(isHost, 0, localSeat)
         If mySeat < 0 Then Return
@@ -726,20 +875,29 @@ Public Class Form1
             ' Ghi tam vao danh sach hien thi cuc bo; neu Host tu choi se bao qua TX_BET_FAIL
             AddMyBetDisplay(kind, value, amount)
         End If
+
+        If IsNumberBetKind(kind) Then myHasNumberBet = True
+        If IsSideBetKind(kind) Then myHasSideBet = True
+        UpdateBetButtonsEnabled()
     End Sub
 
-    ''' <summary>Chi Host goi: kiem tra hop le qua TaiXiuGame.PlaceBet(), neu OK thi ghi nhan va
-    ''' (neu la cuoc cua chinh Client khac) bao lai cho Client do de hien thi; neu FAIL bao TX_BET_FAIL.</summary>
+    ''' <summary>Chi Host goi: kiem tra hop le (bao gom luat "1 so + 1 cua") qua TaiXiuGame.PlaceBet()
+    ''' va SeatHasNumberBet/SeatHasSideBet, neu OK thi ghi nhan; neu FAIL bao TX_BET_FAIL.</summary>
     Private Sub ProcessBetFromSeat(seat As Integer, kind As TaiXiuGame.BetKind, value As Integer, amount As Long)
+        If IsNumberBetKind(kind) AndAlso SeatHasNumberBet(seat) Then
+            RejectBet(seat, "Người chơi này đã chọn 1 số trong ván này rồi.")
+            Return
+        End If
+        If IsSideBetKind(kind) AndAlso SeatHasSideBet(seat) Then
+            RejectBet(seat, "Người chơi này đã chọn cửa Trên/Dưới trong ván này rồi.")
+            Return
+        End If
+
         Dim currentScore As Long = 0L
         If scoresBySeat.ContainsKey(seat) Then currentScore = scoresBySeat(seat)
 
         If Not game.PlaceBet(seat, kind, value, amount, currentScore) Then
-            If seat = 0 Then
-                MessageBox.Show("Cược không hợp lệ (kiểm tra số điểm tối thiểu/tối đa hoặc điểm hiện có).")
-            Else
-                hub.SendToClient(seat, "TX_BET_FAIL:")
-            End If
+            RejectBet(seat, "Cược không hợp lệ (kiểm tra số điểm tối thiểu/tối đa hoặc điểm hiện có).")
             Return
         End If
 
@@ -749,10 +907,53 @@ Public Class Form1
         AppendChat("[Hệ thống] Player " & (seat + 1).ToString() & " đã đặt cược.")
     End Sub
 
+    Private Sub RejectBet(seat As Integer, reason As String)
+        If seat = 0 Then
+            MessageBox.Show(reason)
+        Else
+            hub.SendToClient(seat, "TX_BET_FAIL:" & reason)
+        End If
+    End Sub
+
+    ''' <summary>Kiem tra (theo du lieu chinh thuc tren Host, game.CurrentBets) xem seat da co
+    ''' cuoc loai "chon so" (Bo Ba/Tong diem) trong van hien tai chua.</summary>
+    Private Function SeatHasNumberBet(seat As Integer) As Boolean
+        If Not game.CurrentBets.ContainsKey(seat) Then Return False
+        For Each b As TaiXiuGame.BetInfo In game.CurrentBets(seat)
+            If IsNumberBetKind(b.Kind) Then Return True
+        Next b
+        Return False
+    End Function
+
+    ''' <summary>Kiem tra xem seat da co cuoc loai "chon cua" (Tren/Duoi) trong van hien tai chua.</summary>
+    Private Function SeatHasSideBet(seat As Integer) As Boolean
+        If Not game.CurrentBets.ContainsKey(seat) Then Return False
+        For Each b As TaiXiuGame.BetInfo In game.CurrentBets(seat)
+            If IsSideBetKind(b.Kind) Then Return True
+        Next b
+        Return False
+    End Function
+
     Private Sub AddMyBetDisplay(kind As TaiXiuGame.BetKind, value As Integer, amount As Long)
         Dim label As String = BetLabel(kind, value) & ": " & amount.ToString() & " điểm"
         myBetsThisRound.Add(label)
+        myBetKindsThisRound.Add(kind)
         lstMyBets.Items.Add(label)
+    End Sub
+
+    ''' <summary>Goi khi Host tu choi 1 cuoc da hien thi tam thoi phia Client (TX_BET_FAIL):
+    ''' xoa dong hien thi cuoi cung va mo lai nut tuong ung de nguoi choi chon lai.</summary>
+    Private Sub UndoLastMyBetDisplay()
+        If myBetKindsThisRound.Count = 0 Then Return
+        Dim lastIdx As Integer = myBetKindsThisRound.Count - 1
+        Dim lastKind As TaiXiuGame.BetKind = myBetKindsThisRound(lastIdx)
+        myBetKindsThisRound.RemoveAt(lastIdx)
+        myBetsThisRound.RemoveAt(lastIdx)
+        If lstMyBets.Items.Count > 0 Then lstMyBets.Items.RemoveAt(lstMyBets.Items.Count - 1)
+
+        If IsNumberBetKind(lastKind) Then myHasNumberBet = False
+        If IsSideBetKind(lastKind) Then myHasSideBet = False
+        UpdateBetButtonsEnabled()
     End Sub
 
     Private Function BetLabel(kind As TaiXiuGame.BetKind, value As Integer) As String
@@ -767,13 +968,15 @@ Public Class Form1
 
     Private Sub UpdateBetButtonsEnabled()
         Dim canBet As Boolean = (state = RoundState.Betting)
-        btnBetTren.Enabled = canBet
-        btnBetDuoi.Enabled = canBet
+        Dim canPickSide As Boolean = canBet AndAlso Not myHasSideBet
+        Dim canPickNumber As Boolean = canBet AndAlso Not myHasNumberBet
+        btnBetTren.Enabled = canPickSide
+        btnBetDuoi.Enabled = canPickSide
         For v As Integer = 1 To 6
-            btnBetBoBa(v).Enabled = canBet
+            btnBetBoBa(v).Enabled = canPickNumber
         Next v
         For sum As Integer = 4 To 17
-            btnBetTong(sum).Enabled = canBet
+            btnBetTong(sum).Enabled = canPickNumber
         Next sum
     End Sub
 
@@ -785,6 +988,8 @@ Public Class Form1
         UpdateBetButtonsEnabled()
         lblRoundInfo.Text = "Kết quả: " & diceStr.Replace(","c, " - ")
         lblCountdown.Text = ""
+        If picBannerEnded IsNot Nothing Then picBannerEnded.Visible = True
+        If lblBannerEnded IsNot Nothing Then lblBannerEnded.Visible = True
 
         If entriesStr.Trim() <> "" Then
             Dim entries As String() = entriesStr.Split(";"c)
