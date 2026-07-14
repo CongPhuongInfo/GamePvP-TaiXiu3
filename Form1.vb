@@ -93,21 +93,15 @@ Public Class Form1
     Private pnlPlayers(3) As Panel
     Private lblCardStatus(3) As Label
     Private lblCardStats(3) As Label
-    Private lstRoundHistory As ListBox
-    Private roundHistory As New List(Of String)
+    Private pnlRoundHistory As Panel
+    Private roundHistory As New List(Of RoundHistoryEntry)
     Private currentRoundNoLocal As Integer = 0
 
-    ' ------------------- Sprite trang tri (nen go, khung, ruong, xu, ruy bang) -------------------
+    ' ------------------- Sprite trang tri (nen go, ruong, xu) -------------------
     Private sprBgWood As Image
     Private sprChest As Image
-    Private sprFrameTren As Image
-    Private sprFrameDuoi As Image
-    Private sprFrameBoBa As Image
     Private sprCoin As Image
-    Private sprBannerEnded As Image
     Private picChest As PictureBox
-    Private picBannerEnded As PictureBox
-    Private lblBannerEnded As Label
 
     ' ------------------- UI: Chat panel -------------------
     Private pnlChat As Panel
@@ -148,11 +142,7 @@ Public Class Form1
             ' Sprite trang tri: khong bat buoc, thieu file nao thi fallback mau phang cho phan do (xem cac Sub Build...)
             sprBgWood = LoadImg(dir, "bg_wood_table.png")
             sprChest = LoadImg(dir, "chest_icon.png")
-            sprFrameTren = LoadImg(dir, "frame_tren.png")
-            sprFrameDuoi = LoadImg(dir, "frame_duoi.png")
-            sprFrameBoBa = LoadImg(dir, "frame_boba.png")
             sprCoin = LoadImg(dir, "coin_icon.png")
-            sprBannerEnded = LoadImg(dir, "banner_ended.png")
         Catch
             spritesLoaded = False
         End Try
@@ -449,41 +439,99 @@ Public Class Form1
 
     Private Sub BuildRoundHistoryPanel()
         Dim lblTitle As New Label()
-        lblTitle.Text = "Lịch sử các ván:"
+        lblTitle.Text = "Nhật ký kết quả (gần đây nhất bên trái):"
         lblTitle.Font = New Font("Segoe UI", 9.0!, FontStyle.Bold)
-        lblTitle.ForeColor = Color.Gold
+        lblTitle.ForeColor = Color.White
         lblTitle.BackColor = Color.Transparent
         lblTitle.AutoSize = True
         lblTitle.Location = New Point(700, 68)
         pnlGame.Controls.Add(lblTitle)
         lblTitle.BringToFront()
 
-        lstRoundHistory = New ListBox()
-        lstRoundHistory.Location = New Point(700, 90)
-        lstRoundHistory.Size = New Size(250, 240)
-        lstRoundHistory.BackColor = Color.FromArgb(250, 250, 245)
-        lstRoundHistory.ForeColor = Color.Black
-        lstRoundHistory.Font = New Font("Segoe UI", 9.0!)
-        pnlGame.Controls.Add(lstRoundHistory)
-        lstRoundHistory.BringToFront()
+        pnlRoundHistory = New Panel()
+        pnlRoundHistory.Location = New Point(700, 90)
+        pnlRoundHistory.Size = New Size(250, 240)
+        pnlRoundHistory.BackColor = Color.FromArgb(12, 16, 20)
+        pnlRoundHistory.BorderStyle = BorderStyle.FixedSingle
+        pnlRoundHistory.AutoScroll = True
+        AddHandler pnlRoundHistory.Paint, AddressOf RoundHistoryPanel_Paint
+        pnlGame.Controls.Add(pnlRoundHistory)
+        pnlRoundHistory.BringToFront()
     End Sub
 
-    ''' <summary>Them 1 dong lich su cho van vua ket thuc (goi tu ApplyResult). Giu toi da 30 dong
-    ''' gan nhat de khong phinh to danh sach vo han.</summary>
+    ''' <summary>Ve toan bo nhat ky: moi van la 1 cot gom nhan "Trên/Dưới/-" + 3 vien tron nho
+    ''' chua so xuc xac, van gan nhat nam ben trai nhat (giong dung kieu nhat ky trong
+    ''' GamePvP-VongQuayRong: HistoryPanel_Paint tu ve toan bo, khong dung ListBox/child control).</summary>
+    Private Sub RoundHistoryPanel_Paint(sender As Object, e As PaintEventArgs)
+        Dim g As Graphics = e.Graphics
+        g.SmoothingMode = SmoothingMode.AntiAlias
+
+        Const colW As Integer = 40
+        Const circleSize As Integer = 20
+        Const circleGap As Integer = 2
+        Dim x As Integer = 6
+
+        For Each entry As RoundHistoryEntry In roundHistory
+            Dim labelColor As Color = Color.FromArgb(220, 195, 140)
+            Using fnt As New Font("Segoe UI", 7.5!, FontStyle.Bold)
+                Using txtBrush As New SolidBrush(labelColor)
+                    g.DrawString(entry.SideLabel, fnt, txtBrush, New PointF(x, 4))
+                End Using
+            End Using
+
+            For i As Integer = 0 To 2
+                Dim cy As Integer = 22 + i * (circleSize + circleGap)
+                Dim rect As New Rectangle(x, cy, circleSize, circleSize)
+                Using bg As New SolidBrush(Color.FromArgb(225, 210, 175))
+                    g.FillEllipse(bg, rect)
+                End Using
+                Using pen As New Pen(Color.FromArgb(120, 95, 55), 1.0F)
+                    g.DrawEllipse(pen, rect)
+                End Using
+                Using sf As New StringFormat()
+                    sf.Alignment = StringAlignment.Center
+                    sf.LineAlignment = StringAlignment.Center
+                    Using fnt As New Font("Segoe UI", 8.5!, FontStyle.Bold)
+                        Using txtBrush As New SolidBrush(Color.FromArgb(70, 45, 20))
+                            g.DrawString(entry.Dice(i).ToString(), fnt, txtBrush, New RectangleF(rect.X, rect.Y, rect.Width, rect.Height), sf)
+                        End Using
+                    End Using
+                End Using
+            Next i
+
+            x += colW
+        Next entry
+
+        pnlRoundHistory.AutoScrollMinSize = New Size(Math.Max(pnlRoundHistory.Width, x + 10), 0)
+    End Sub
+
+    ''' <summary>1 dong du lieu nhat ky: nhan cua/tren-duoi + 3 mat xuc xac cua van do.</summary>
+    Private Class RoundHistoryEntry
+        Public SideLabel As String
+        Public Dice As Integer()
+    End Class
+
+    ''' <summary>Them 1 van vua ket thuc vao dau danh sach nhat ky (van gan nhat o ben trai nhat,
+    ''' giong quy uoc trong GamePvP-VongQuayRong), gioi han toi da 25 van gan nhat.</summary>
     Private Sub AddRoundHistoryEntry(roundNo As Integer, dice As Integer(), sum As Integer, myNetPayout As Long, hasMyOutcome As Boolean)
-        Dim resultTxt As String = dice(0).ToString() & "-" & dice(1).ToString() & "-" & dice(2).ToString()
-        Dim line As String = "Ván " & roundNo.ToString() & ": " & resultTxt & " (Tổng " & sum.ToString() & ")"
-        If hasMyOutcome Then
-            line &= If(myNetPayout >= 0, "  → Bạn +" & myNetPayout.ToString(), "  → Bạn " & myNetPayout.ToString())
+        Dim isTriple As Boolean = (dice(0) = dice(1) AndAlso dice(1) = dice(2))
+        Dim sideLabel As String
+        If isTriple Then
+            sideLabel = "-"
+        ElseIf sum >= 11 Then
+            sideLabel = "Trên"
+        Else
+            sideLabel = "Dưới"
         End If
 
-        roundHistory.Add(line)
-        If roundHistory.Count > 30 Then roundHistory.RemoveAt(0)
+        Dim entry As New RoundHistoryEntry()
+        entry.SideLabel = sideLabel
+        entry.Dice = New Integer() {dice(0), dice(1), dice(2)}
+        roundHistory.Insert(0, entry)
+        If roundHistory.Count > 25 Then roundHistory.RemoveAt(roundHistory.Count - 1)
 
-        If lstRoundHistory IsNot Nothing Then
-            lstRoundHistory.Items.Add(line)
-            If lstRoundHistory.Items.Count > 30 Then lstRoundHistory.Items.RemoveAt(0)
-            lstRoundHistory.TopIndex = Math.Max(0, lstRoundHistory.Items.Count - 1)
+        If pnlRoundHistory IsNot Nothing Then
+            pnlRoundHistory.Invalidate()
         End If
     End Sub
 
@@ -529,29 +577,6 @@ Public Class Form1
             pnlGame.Controls.Add(picChest)
             picChest.SendToBack()
         End If
-
-        ' Ruy bang "Da ket thuc": an mac dinh, chi hien khi co ket qua (ApplyResult)
-        If sprBannerEnded IsNot Nothing Then
-            picBannerEnded = New PictureBox()
-            picBannerEnded.Image = sprBannerEnded
-            picBannerEnded.SizeMode = PictureBoxSizeMode.Zoom
-            picBannerEnded.Location = New Point(700, 10)
-            picBannerEnded.Size = New Size(180, 50)
-            picBannerEnded.Visible = False
-            pnlGame.Controls.Add(picBannerEnded)
-
-            lblBannerEnded = New Label()
-            lblBannerEnded.Text = "ĐÃ KẾT THÚC"
-            lblBannerEnded.Font = New Font("Segoe UI", 9.0!, FontStyle.Bold)
-            lblBannerEnded.ForeColor = Color.White
-            lblBannerEnded.BackColor = Color.Transparent
-            lblBannerEnded.TextAlign = ContentAlignment.MiddleCenter
-            lblBannerEnded.Location = picBannerEnded.Location
-            lblBannerEnded.Size = picBannerEnded.Size
-            lblBannerEnded.Visible = False
-            pnlGame.Controls.Add(lblBannerEnded)
-            lblBannerEnded.BringToFront()
-        End If
     End Sub
 
     Private Sub BuildBetPanel()
@@ -588,14 +613,14 @@ Public Class Form1
         btnBetTren = New Button()
         btnBetTren.Text = "TRÊN (11-17) x1"
         btnBetTren.Location = New Point(20, 165) : btnBetTren.Size = New Size(150, 40)
-        StyleBetButtonWithFrame(btnBetTren, sprFrameTren, Color.FromArgb(178, 58, 46))
+        StyleBetButton(btnBetTren, Color.FromArgb(178, 58, 46))
         AddHandler btnBetTren.Click, Sub(s As Object, e As EventArgs) TryPlaceBet(TaiXiuGame.BetKind.Tren, 0, CType(s, Button))
         pnlGame.Controls.Add(btnBetTren)
 
         btnBetDuoi = New Button()
         btnBetDuoi.Text = "DƯỚI (4-10) x1"
         btnBetDuoi.Location = New Point(180, 165) : btnBetDuoi.Size = New Size(150, 40)
-        StyleBetButtonWithFrame(btnBetDuoi, sprFrameDuoi, Color.FromArgb(40, 105, 150))
+        StyleBetButton(btnBetDuoi, Color.FromArgb(40, 105, 150))
         AddHandler btnBetDuoi.Click, Sub(s As Object, e As EventArgs) TryPlaceBet(TaiXiuGame.BetKind.Duoi, 0, CType(s, Button))
         pnlGame.Controls.Add(btnBetDuoi)
 
@@ -612,7 +637,7 @@ Public Class Form1
             Dim btn As New Button()
             btn.Text = v.ToString() & "-" & v.ToString() & "-" & v.ToString()
             btn.Location = New Point(20 + (v - 1) * 58, 238) : btn.Size = New Size(54, 40)
-            StyleBetButtonWithFrame(btn, sprFrameBoBa, Color.FromArgb(150, 110, 30))
+            StyleBetButton(btn, Color.FromArgb(150, 110, 30))
             Dim vv As Integer = v
             AddHandler btn.Click, Sub(s As Object, e As EventArgs) TryPlaceBet(TaiXiuGame.BetKind.BoBa, vv, CType(s, Button))
             pnlGame.Controls.Add(btn)
@@ -745,27 +770,45 @@ Public Class Form1
         btnHostRoll.Visible = isHost
     End Sub
 
+    ''' <summary>Mau rieng cho tung seat (giong quy uoc trong GamePvP-VongQuayRong): do/xanh duong/
+    ''' xanh la/tim, dung cho vach mau ben trai the va tieu de ten nguoi choi.</summary>
+    Private Function PlayerColor(seat As Integer) As Color
+        Select Case seat
+            Case 0 : Return Color.FromArgb(200, 40, 40)
+            Case 1 : Return Color.FromArgb(30, 110, 200)
+            Case 2 : Return Color.FromArgb(30, 150, 70)
+            Case Else : Return Color.FromArgb(160, 90, 190)
+        End Select
+    End Function
+
     Private Sub BuildPlayerCards()
         For p As Integer = 0 To 3
             Dim card As New Panel()
             card.Location = New Point(430 + (p Mod 2) * 130, 340 + (p \ 2) * 90)
             card.Size = New Size(120, 80)
-            card.BackColor = Color.FromArgb(65, 78, 72)
+            card.BackColor = Color.White
+            card.BorderStyle = BorderStyle.FixedSingle
             pnlGame.Controls.Add(card)
             pnlPlayers(p) = card
+
+            Dim bar As New Panel()
+            bar.Location = New Point(0, 0)
+            bar.Size = New Size(6, 80)
+            bar.BackColor = PlayerColor(p)
+            card.Controls.Add(bar)
 
             Dim title As New Label()
             title.Name = "title"
             title.Text = "Player " & (p + 1).ToString()
-            title.ForeColor = Color.Gold
+            title.ForeColor = PlayerColor(p)
             title.Font = New Font("Segoe UI", 8.5!, FontStyle.Bold)
-            title.Location = New Point(6, 6) : title.Size = New Size(108, 16)
+            title.Location = New Point(14, 6) : title.Size = New Size(100, 16)
             card.Controls.Add(title)
 
             Dim status As New Label()
-            status.ForeColor = Color.WhiteSmoke
+            status.ForeColor = Color.DimGray
             status.Font = New Font("Segoe UI", 8.5!)
-            status.Location = New Point(6, 26) : status.Size = New Size(108, 40)
+            status.Location = New Point(14, 26) : status.Size = New Size(100, 40)
             card.Controls.Add(status)
             lblCardStatus(p) = status
 
@@ -910,8 +953,6 @@ Public Class Form1
         UnhighlightBetButton(mySelectedSideBtn)
         mySelectedNumberBtn = Nothing
         mySelectedSideBtn = Nothing
-        If picBannerEnded IsNot Nothing Then picBannerEnded.Visible = False
-        If lblBannerEnded IsNot Nothing Then lblBannerEnded.Visible = False
         UpdateBetButtonsEnabled()
         If isHost Then btnHostRoll.Enabled = True
     End Sub
@@ -1098,8 +1139,6 @@ Public Class Form1
 
         lblRoundInfo.Text = "Kết quả: " & diceStr.Replace(","c, " - ") & "   (Tổng " & diceSum.ToString() & ")"
         lblCountdown.Text = ""
-        If picBannerEnded IsNot Nothing Then picBannerEnded.Visible = True
-        If lblBannerEnded IsNot Nothing Then lblBannerEnded.Visible = True
 
         Dim myNetPayout As Long = 0
         Dim hasMyOutcome As Boolean = False
